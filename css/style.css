@@ -1,0 +1,198 @@
+:root {
+    --neon-blue: #00f3ff;
+    --neon-purple: #bc13fe;
+    --glass-bg: rgba(255, 255, 255, 0.1);
+    --futuristic-font: 'Segoe UI', system-ui, sans-serif;
+}
+
+html, body {
+    height: 100%;
+    margin: 0;
+}
+
+/* Use flexbox to center the container vertically and horizontally */
+body {
+    font-family: var(--futuristic-font);
+    background: linear-gradient(45deg, #0a0a2e, #1a1a4f);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;  /* Prevent scrolling */
+    text-align: center; /* Centers non-form text */
+}
+
+.container {
+    width: 100%;
+    max-width: 400px;
+    padding: 2rem;
+    background: var(--glass-bg);
+    border-radius: 16px;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 0 30px rgba(0, 243, 255, 0.1);
+    animation: floatUp 0.8s ease-out forwards;
+    position: relative;
+    overflow: hidden;
+}
+
+@keyframes floatUp {
+    from { 
+        transform: translateY(20px); 
+        opacity: 0; 
+    }
+    to { 
+        transform: translateY(0); 
+        opacity: 1; 
+    }
+}
+
+h1 {
+    margin: 0 0 2rem 0;
+    background: linear-gradient(45deg, var(--neon-blue), var(--neon-purple));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    font-weight: 600;
+    letter-spacing: 1px;
+}
+
+/* Ensure the form spans the full container width */
+form {
+    width: 100%;
+}
+
+/* Style each label/input pair */
+.form-field {
+    margin-bottom: 1.5rem;
+}
+
+/* Label styling: above field, left aligned and a bit gray */
+.form-field label {
+    display: block;
+    margin-bottom: 0.5rem;
+    text-align: left;
+    color: #ccc;
+}
+
+.form-field input[type="text"],
+.form-field input[type="email"],
+.form-field input[type="password"] {
+    width: 100%;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: white;
+    padding: 12px 15px;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+    box-sizing: border-box;
+}
+
+input:focus {
+    outline: none;
+    border-color: var(--neon-blue);
+    box-shadow: 0 0 15px rgba(0, 243, 255, 0.2);
+}
+
+/* Style the submit button to match container width */
+input[type="submit"] {
+    width: 100%;
+    background: linear-gradient(45deg, var(--neon-blue), var(--neon-purple));
+    border: none;
+    color: white;
+    padding: 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+input[type="submit"]:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 20px rgba(0, 243, 255, 0.3);
+}
+
+/* Style the switch-link text and center it */
+.switch-link {
+    margin-top: 1rem;
+}
+
+.switch-link p {
+    margin: 0;
+    text-align: center;
+}
+
+.switch-link a {
+    color: var(--neon-blue);
+    text-decoration: none;
+    transition: color 0.3s ease;
+}
+
+.switch-link a:hover {
+    color: var(--neon-purple);
+}
+
+/* Additional message and error styles */
+.message, .error {
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 1.5rem;
+    animation: slideIn 0.5s ease-out;
+}
+
+.message {
+    background: rgba(0, 255, 100, 0.1);
+    border: 1px solid #00ff88;
+}
+
+.error {
+    background: rgba(255, 50, 0, 0.1);
+    border: 1px solid #ff3300;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 480px) {
+    .container {
+        max-width: 100%;
+        margin: 1rem;
+        padding: 1.5rem;
+    }
+
+    h1 {
+        font-size: 1.8rem;
+    }
+
+    input[type="submit"] {
+        padding: 12px;
+    }
+}
+
+@media (max-width: 768px) {
+    .container.register {
+        margin-top: 1rem;
+    }
+}
+
+/* Loading Animation */
+@keyframes pulse {
+    0% { opacity: 0.6; }
+    50% { opacity: 1; }
+    100% { opacity: 0.6; }
+}
+
+.loading {
+    animation: pulse 1.5s infinite;
+}
