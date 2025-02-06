@@ -65,6 +65,73 @@ function generate_otp() {
     return $otp_case_sensitive ? $otp : strtolower($otp);
 }
 
+// CAPTCHA verification functions
+function verify_recaptcha_v2($response, $secret_key) {
+    $url = 'https://www.google.com/recaptcha/api/siteverify';
+    $data = [
+        'secret' => $secret_key,
+        'response' => $response,
+        'remoteip' => $_SERVER['REMOTE_ADDR']
+    ];
+    
+    $options = [
+        'http' => [
+            'header' => "Content-type: application/x-www-form-urlencoded\r\n",
+            'method' => 'POST',
+            'content' => http_build_query($data)
+        ]
+    ];
+    
+    $context = stream_context_create($options);
+    $result = file_get_contents($url, false, $context);
+    $response = json_decode($result);
+    return $response->success ?? false;
+}
+
+function verify_recaptcha_v3($response, $secret_key) {
+    $url = 'https://www.google.com/recaptcha/api/siteverify';
+    $data = [
+        'secret' => $secret_key,
+        'response' => $response,
+        'remoteip' => $_SERVER['REMOTE_ADDR']
+    ];
+    
+    $options = [
+        'http' => [
+            'header' => "Content-type: application/x-www-form-urlencoded\r\n",
+            'method' => 'POST',
+            'content' => http_build_query($data)
+        ]
+    ];
+    
+    $context = stream_context_create($options);
+    $result = file_get_contents($url, false, $context);
+    $response = json_decode($result);
+    return ($response->success ?? false) && ($response->score >= 0.5);
+}
+
+function verify_hcaptcha($response, $secret_key) {
+    $url = 'https://hcaptcha.com/siteverify';
+    $data = [
+        'secret' => $secret_key,
+        'response' => $response,
+        'remoteip' => $_SERVER['REMOTE_ADDR']
+    ];
+    
+    $options = [
+        'http' => [
+            'header' => "Content-type: application/x-www-form-urlencoded\r\n",
+            'method' => 'POST',
+            'content' => http_build_query($data)
+        ]
+    ];
+    
+    $context = stream_context_create($options);
+    $result = file_get_contents($url, false, $context);
+    $response = json_decode($result);
+    return $response->success ?? false;
+}
+
 // Send verification email
 function send_verification_email($email, $otp) {
     global $verification_email_subject, $verification_email_message, $email_verification_type,
@@ -139,15 +206,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'regis
                     exit("Failed to send verification email.");
                 }
                 break;
+                
             case 'recaptcha_v2':
+                $captcha_response = $_POST['g-recaptcha-response'] ?? '';
+                $verification_passed = verify_recaptcha_v2($captcha_response, $recaptcha_v2_secret_key);
+                break;
+                
             case 'recaptcha_v3':
+                $captcha_response = $_POST['g-recaptcha-response'] ?? '';
+                $verification_passed = verify_recaptcha_v3($captcha_response, $recaptcha_v3_secret_key);
+                break;
+                
             case 'hcaptcha':
-                $captcha_response = $_POST['g-recaptcha-response'] ?? $_POST['h-captcha-response'] ?? '';
-                // You'd implement verify_recaptcha_v2 / verify_recaptcha_v3 / verify_hcaptcha similarly
-                // For brevity, we'll just set $verification_passed if captcha passes
-                // $verification_passed = ...
+                $captcha_response = $_POST['h-captcha-response'] ?? '';
+                $verification_passed = verify_hcaptcha($captcha_response, $hcaptcha_secret_key);
                 break;
         }
+        
         if (!$verification_passed) {
             exit("Verification failed. Please try again.");
         }
@@ -232,7 +307,23 @@ $mysqli->close();
         <input type="password" id="reg-pass" name="password" required />
       </div>
 
-      <!-- reCAPTCHA/hCaptcha widget can go here if needed -->
+      <?php if ($verification_method === 'recaptcha_v2'): ?>
+        <div class="g-recaptcha" data-sitekey="<?php echo htmlspecialchars($recaptcha_v2_site_key); ?>"></div>
+        <script src="https://www.google.com/recaptcha/api.js"></script>
+      <?php elseif ($verification_method === 'recaptcha_v3'): ?>
+        <input type="hidden" name="g-recaptcha-response" id="g-recaptcha-response">
+        <script src="https://www.google.com/recaptcha/api.js?render=<?php echo htmlspecialchars($recaptcha_v3_site_key); ?>"></script>
+        <script>
+          grecaptcha.ready(function() {
+            grecaptcha.execute('<?php echo htmlspecialchars($recaptcha_v3_site_key); ?>', {action: 'register'}).then(function(token) {
+              document.getElementById('g-recaptcha-response').value = token;
+            });
+          });
+        </script>
+      <?php elseif ($verification_method === 'hcaptcha'): ?>
+        <div class="h-captcha" data-sitekey="<?php echo htmlspecialchars($hcaptcha_site_key); ?>"></div>
+        <script src="https://js.hcaptcha.com/1/api.js" async defer></script>
+      <?php endif; ?>
 
       <input type="submit" value="Register" />
     </form>

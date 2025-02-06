@@ -1,9 +1,11 @@
 <?php
-// MySQL Server configuration
-$mysql_host = '';
+// MySQL Server configuration, note that the Port is set to 3306!
+$mysql_host = 'localhost';
 $mysql_user = '';
 $mysql_password = '';
 $mysql_database = '';
+
+// ----------------------- Seesion/Login options ---------------------
 
 // Option to require login
 $require_login = true;
@@ -17,6 +19,9 @@ $session_max_lifetime = 24;
 
 // Session cookie lifetime in hours
 $session_cookie_lifetime = 24;
+
+
+// ----------------------- Registration options -----------------------
 
 // Verification method options: 'none', 'email', 'recaptcha_v2', 'recaptcha_v3', 'hcaptcha'
 $verification_method = 'none';
@@ -33,6 +38,8 @@ $smtp_username = '';
 $smtp_password = '';
 $smtp_from = '';
 
+// ----------------------- Currently unimplemented --------------------
+
 // Email Server configuration via IMAP
 $imap_host = 'imap.yourdomain.com';
 $imap_port = 993;
@@ -47,6 +54,8 @@ $pop3_username = '';
 $pop3_password = '';
 $pop3_from = '';
 
+// --------------------------------------------------------------------
+
 // Email Server configuration via Sendmail
 $sendmail_path = '/usr/sbin/sendmail';
 
@@ -57,15 +66,17 @@ $otp_type = 'numeric'; // Options: 'numeric', 'alpha', 'alphanumeric'
 $otp_case_sensitive = false;
 $otp_max_attempts = 3;
 
+// Note: The Captcha-Keys are tesing keys and should be replaced with your own keys, The test-keys will always return a success response!
+
 // reCaptcha v2 configuration
-$recaptcha_v2_site_key = 'your_recaptcha_v2_site_key';
-$recaptcha_v2_secret_key = 'your_recaptcha_v2_secret_key';
+$recaptcha_v2_site_key = '6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI';
+$recaptcha_v2_secret_key = '6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe';
 
 // reCaptcha v3 configuration
-$recaptcha_v3_site_key = 'your_recaptcha_v3_site_key';
-$recaptcha_v3_secret_key = 'your_recaptcha_v3_secret_key';
+$recaptcha_v3_site_key = '6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI';
+$recaptcha_v3_secret_key = '6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe';
 
 // hCaptcha configuration
-$hcaptcha_site_key = 'your_hcaptcha_site_key';
-$hcaptcha_secret_key = 'your_hcaptcha_secret_key';
+$hcaptcha_site_key = '10000000-ffff-ffff-ffff-000000000001';
+$hcaptcha_secret_key = '0x0000000000000000000000000000000000000000';
 ?>
