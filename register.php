@@ -255,7 +255,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'regis
     $stmt->bind_param("ssssii", $username, $email, $hashed_password, $verification_token, $is_verified, $otp_expiry);
     if ($stmt->execute()) {
         if ($verification_method === 'email') {
-            echo "Please check your email to verify your account.";
+            $_SESSION['pending_verification'] = true;
+            $_SESSION['pending_email'] = $email;
+            header("Location: verify.php");
+            exit();
         } else {
             $_SESSION['user_id']  = $mysqli->insert_id;
             $_SESSION['username'] = $username;

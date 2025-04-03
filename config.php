@@ -36,23 +36,7 @@ $smtp_host = 'smtp.yourdomain.com';
 $smtp_port = 587;
 $smtp_username = '';
 $smtp_password = '';
-$smtp_from = '';
-
-// ----------------------- Currently unimplemented --------------------
-
-// Email Server configuration via IMAP
-$imap_host = 'imap.yourdomain.com';
-$imap_port = 993;
-$imap_username = '';
-$imap_password = '';
-$imap_from = '';
-
-// Email Server configuration via POP3
-$pop3_host = 'pop3.yourdomain.com';
-$pop3_port = 995;
-$pop3_username = '';
-$pop3_password = '';
-$pop3_from = '';
+$smtp_from = 'syfe-noreply@example.com';
 
 // --------------------------------------------------------------------
 
