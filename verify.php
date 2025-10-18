@@ -21,6 +21,8 @@ if (!isset($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
 
+require 'utils.php';
+
 // Check if verification is pending
 if (!isset($_SESSION['pending_verification']) || !isset($_SESSION['pending_email'])) {
     header("Location: login.php");
@@ -40,8 +42,12 @@ $success_message = '';
 
 // Handle verification submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'verify') {
+     if (isset($_SESSION['rate_limit']) && time() < $_SESSION['rate_limit']) {
+        exit("Rate limit exceeded. Please try again later.");
+    }
+
     // Validate CSRF token
-    $csrf_token = filter_input(INPUT_POST, 'csrf_token', FILTER_SANITIZE_STRING);
+    $csrf_token = filter_input(INPUT_POST, 'csrf_token', FILTER_SANITIZE_SPECIAL_CHARS);
     if (!hash_equals($_SESSION['csrf_token'], $csrf_token)) {
         $error_message = "Invalid CSRF token.";
     } else {
@@ -60,10 +66,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'verif
             
             // Check if OTP matches and is not expired
             if ($user['otp_expiry'] < $current_time) {
+                $_SESSION['rate_limit'] = time() + 5;
                 $error_message = "Verification code has expired. Please request a new one.";
             } elseif (!$otp_case_sensitive) {
                 // Case-insensitive comparison if configured
                 if (strtolower($otp) !== strtolower($user['verification_token'])) {
+                    $_SESSION['rate_limit'] = time() + 5;
                     $error_message = "Invalid verification code.";
                 } else {
                     // Mark user as verified
@@ -113,7 +121,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'verif
 // Handle resend verification code
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'resend') {
     // Validate CSRF token
-    $csrf_token = filter_input(INPUT_POST, 'csrf_token', FILTER_SANITIZE_STRING);
+    $csrf_token = filter_input(INPUT_POST, 'csrf_token', FILTER_SANITIZE_SPECIAL_CHARS);
     if (!hash_equals($_SESSION['csrf_token'], $csrf_token)) {
         $error_message = "Invalid CSRF token.";
     } else {
@@ -133,61 +141,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'resen
     }
 }
 
-// OTP generation function (copied from register.php)
-function generate_otp() {
-    global $otp_length, $otp_type, $otp_case_sensitive;
-    $characters = match ($otp_type) {
-        'alpha'        => 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ',
-        'alphanumeric' => '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ',
-        default        => '0123456789',
-    };
-    $otp = '';
-    for ($i = 0; $i < $otp_length; $i++) {
-        $otp .= $characters[random_int(0, strlen($characters) - 1)];
-    }
-    return $otp_case_sensitive ? $otp : strtolower($otp);
-}
-
-// Send verification email function (copied from register.php)
-function send_verification_email($email, $otp) {
-    global $verification_email_subject, $verification_email_message, $email_verification_type,
-           $smtp_host, $smtp_port, $smtp_username, $smtp_password, $smtp_from,
-           $sendmail_path;
-
-    require_once 'PHPMailer/PHPMailer.php';
-    require_once 'PHPMailer/SMTP.php';
-    require_once 'PHPMailer/Exception.php';
-
-    $mail = new PHPMailer\PHPMailer\PHPMailer(true);
-    try {
-        switch ($email_verification_type) {
-            case 'smtp':
-                $mail->isSMTP();
-                $mail->Host       = $smtp_host;
-                $mail->Port       = $smtp_port;
-                $mail->SMTPAuth   = true;
-                $mail->Username   = $smtp_username;
-                $mail->Password   = $smtp_password;
-                $mail->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
-                break;
-            case 'sendmail':
-                $mail->isSendmail();
-                $mail->Sendmail = $sendmail_path;
-                break;
-            default:
-                return false;
-        }
-        $mail->setFrom($smtp_from);
-        $mail->addAddress($email);
-        $mail->Subject = $verification_email_subject;
-        $mail->Body    = $verification_email_message . $otp;
-        $mail->send();
-        return true;
-    } catch (Exception $e) {
-        error_log("Email sending failed: " . $mail->ErrorInfo);
-        return false;
-    }
-}
 
 // Security headers
 header("Content-Security-Policy: default-src 'self'");

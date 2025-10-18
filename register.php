@@ -21,6 +21,8 @@ if (!isset($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
 
+require 'utils.php';
+
 // Database connection
 $mysqli = new mysqli($mysql_host, $mysql_user, $mysql_password, $mysql_database);
 if ($mysqli->connect_error) {
@@ -50,133 +52,10 @@ function isPasswordStrongEnough($password) {
     }
 }
 
-// OTP generation function
-function generate_otp() {
-    global $otp_length, $otp_type, $otp_case_sensitive;
-    $characters = match ($otp_type) {
-        'alpha'        => 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ',
-        'alphanumeric' => '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ',
-        default        => '0123456789',
-    };
-    $otp = '';
-    for ($i = 0; $i < $otp_length; $i++) {
-        $otp .= $characters[random_int(0, strlen($characters) - 1)];
-    }
-    return $otp_case_sensitive ? $otp : strtolower($otp);
-}
-
-// CAPTCHA verification functions
-function verify_recaptcha_v2($response, $secret_key) {
-    $url = 'https://www.google.com/recaptcha/api/siteverify';
-    $data = [
-        'secret' => $secret_key,
-        'response' => $response,
-        'remoteip' => $_SERVER['REMOTE_ADDR']
-    ];
-    
-    $options = [
-        'http' => [
-            'header' => "Content-type: application/x-www-form-urlencoded\r\n",
-            'method' => 'POST',
-            'content' => http_build_query($data)
-        ]
-    ];
-    
-    $context = stream_context_create($options);
-    $result = file_get_contents($url, false, $context);
-    $response = json_decode($result);
-    return $response->success ?? false;
-}
-
-function verify_recaptcha_v3($response, $secret_key) {
-    $url = 'https://www.google.com/recaptcha/api/siteverify';
-    $data = [
-        'secret' => $secret_key,
-        'response' => $response,
-        'remoteip' => $_SERVER['REMOTE_ADDR']
-    ];
-    
-    $options = [
-        'http' => [
-            'header' => "Content-type: application/x-www-form-urlencoded\r\n",
-            'method' => 'POST',
-            'content' => http_build_query($data)
-        ]
-    ];
-    
-    $context = stream_context_create($options);
-    $result = file_get_contents($url, false, $context);
-    $response = json_decode($result);
-    return ($response->success ?? false) && ($response->score >= 0.5);
-}
-
-function verify_hcaptcha($response, $secret_key) {
-    $url = 'https://hcaptcha.com/siteverify';
-    $data = [
-        'secret' => $secret_key,
-        'response' => $response,
-        'remoteip' => $_SERVER['REMOTE_ADDR']
-    ];
-    
-    $options = [
-        'http' => [
-            'header' => "Content-type: application/x-www-form-urlencoded\r\n",
-            'method' => 'POST',
-            'content' => http_build_query($data)
-        ]
-    ];
-    
-    $context = stream_context_create($options);
-    $result = file_get_contents($url, false, $context);
-    $response = json_decode($result);
-    return $response->success ?? false;
-}
-
-// Send verification email
-function send_verification_email($email, $otp) {
-    global $verification_email_subject, $verification_email_message, $email_verification_type,
-           $smtp_host, $smtp_port, $smtp_username, $smtp_password, $smtp_from,
-           $sendmail_path;
-
-    require_once 'PHPMailer/PHPMailer.php';
-    require_once 'PHPMailer/SMTP.php';
-    require_once 'PHPMailer/Exception.php';
-
-    $mail = new PHPMailer\PHPMailer\PHPMailer(true);
-    try {
-        switch ($email_verification_type) {
-            case 'smtp':
-                $mail->isSMTP();
-                $mail->Host       = $smtp_host;
-                $mail->Port       = $smtp_port;
-                $mail->SMTPAuth   = true;
-                $mail->Username   = $smtp_username;
-                $mail->Password   = $smtp_password;
-                $mail->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
-                break;
-            case 'sendmail':
-                $mail->isSendmail();
-                $mail->Sendmail = $sendmail_path;
-                break;
-            default:
-                return false;
-        }
-        $mail->setFrom($smtp_from);
-        $mail->addAddress($email);
-        $mail->Subject = $verification_email_subject;
-        $mail->Body    = $verification_email_message . $otp;
-        $mail->send();
-        return true;
-    } catch (Exception $e) {
-        error_log("Email sending failed: " . $mail->ErrorInfo);
-        return false;
-    }
-}
-
 // Handle only register request
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'register') {
     // Validate CSRF token
-    $csrf_token = filter_input(INPUT_POST, 'csrf_token', FILTER_SANITIZE_STRING);
+    $csrf_token = filter_input(INPUT_POST, 'csrf_token', FILTER_SANITIZE_SPECIAL_CHARS);
     if (!hash_equals($_SESSION['csrf_token'], $csrf_token)) {
         exit("Invalid CSRF token.");
     }

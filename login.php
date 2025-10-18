@@ -31,8 +31,13 @@ if ($mysqli->connect_error) {
 
 // Handle only login request
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'login') {
+    // Rate limiting
+    if (isset($_SESSION['rate_limit']) && time() < $_SESSION['rate_limit']) {
+        exit("Rate limit exceeded. Please try again later.");
+    }
+
     // Validate CSRF token
-    $csrf_token = filter_input(INPUT_POST, 'csrf_token', FILTER_SANITIZE_STRING);
+    $csrf_token = filter_input(INPUT_POST, 'csrf_token', FILTER_SANITIZE_SPECIAL_CHARS);
     if (!hash_equals($_SESSION['csrf_token'], $csrf_token)) {
         exit("Invalid CSRF token.");
     }
@@ -53,7 +58,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'login
         $user = $result->fetch_assoc();
         // Check if locked out
         if ($user['login_attempts'] >= 3) {
-            exit("Account locked. Too many failed attempts.");
+             error_log("Account locked for user: " . $username);
+            exit("Invalid credentials");
         }
         // Verify password
         if (password_verify($password, $user['password'])) {
@@ -77,10 +83,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'login
             header("Location: index.php");
             exit();
         } else {
+            $_SESSION['rate_limit'] = time() + 5;
             error_log("Failed login attempt for user: " . $username);
             exit("Invalid credentials");
         }
     } else {
+        $_SESSION['rate_limit'] = time() + 5;
         error_log("Failed login attempt for non-existent user: " . $username);
         exit("Invalid credentials");
     }
