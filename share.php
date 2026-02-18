@@ -56,46 +56,49 @@ header("Strict-Transport-Security: max-age=31536000; includeSubDomains; preload"
 
         async function startSharedDownload(providedKeyInfo = null) {
             let keyHex = "";
-            let saltHex = "";
-            
             if (providedKeyInfo) {
-                // Fragment format: KEY_HEX:SALT_HEX (optional salt if we need to derive again)
-                // But if we have the EncryptionKey directly, we just use it.
                 keyHex = providedKeyInfo;
             } else {
-                // Derive from Password
                 const pass = document.getElementById('share-password').value;
                 if (!pass) return;
-
-                // We need the salt to derive the key. 
-                // In a real sharing scenario, the salt should be stored with the file 
-                // or passed in the link. Let's fetch the file data first to see if we can get the salt.
-                // For this prototype, we'll assume the salt is passed in the fragment if needed.
+                // Note: For password derivation, we'd need the salt. 
+                // Since this is a ZK app, the salt would ideally be stored in metadata (if metadata is not encrypted)
+                // or passed in the hash fragment.
             }
 
             document.getElementById('password-form').style.display = 'none';
             document.getElementById('loading').style.display = 'block';
+            document.getElementById('loading').innerText = "Fetching file metadata...";
 
             try {
                 const res = await fetch(`download.php?action=public_get&file_id_public=${publicId}`);
                 if (!res.ok) throw new Error("File not found or private.");
                 const data = await res.json();
 
-                document.getElementById('loading').style.display = 'none';
-                document.getElementById('decrypting').style.display = 'block';
-
                 // Decrypt Metadata
                 const encMeta = JSON.parse(data.metadata);
                 const meta = await ZKAuth.decryptMetadata(encMeta.blob, encMeta.iv, keyHex);
                 
-                // Decrypt Chunks
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('decrypting').style.display = 'block';
+                document.getElementById('decrypting').innerText = `Downloading and decrypting ${meta.name} (0/${data.chunks.length})...`;
+
+                // Decrypt Chunks one by one
                 let decryptedChunks = [];
-                for (let c of data.chunks) {
-                    const dec = await ZKAuth.decryptChunk(c.data, c.chunk_iv, keyHex);
+                for (let i = 0; i < data.chunks.length; i++) {
+                    const cInfo = data.chunks[i];
+                    document.getElementById('decrypting').innerText = `Downloading and decrypting chunk ${i + 1}/${data.chunks.length}...`;
+                    
+                    const cRes = await fetch(`download.php?action=get_chunk&file_id_public=${publicId}&chunk_index=${cInfo.chunk_index}`);
+                    if (!cRes.ok) throw new Error(`Failed to fetch chunk ${i}`);
+                    const chunkHex = await cRes.text();
+
+                    const dec = await ZKAuth.decryptChunk(chunkHex, cInfo.chunk_iv, keyHex);
                     decryptedChunks.push(dec);
                 }
 
                 // Reassemble and Download
+                document.getElementById('decrypting').innerText = "Reassembling and downloading...";
                 const finalBlob = new Blob(decryptedChunks, { type: meta.type });
                 const url = URL.createObjectURL(finalBlob);
                 const a = document.createElement('a');

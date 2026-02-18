@@ -159,32 +159,51 @@ if ($require_login === true) {
     }
 
     async function handleDownload(publicId) {
-        const res = await fetch(`download.php?file_id_public=${publicId}`);
-        const data = await res.json();
-        
-        // 1. Decrypt Metadata
-        const encMeta = JSON.parse(data.metadata);
-        const meta = await ZKAuth.decryptMetadata(encMeta.blob, encMeta.iv, encryptionKey);
-        
-        console.log("Downloading:", meta.name);
+        const status = document.getElementById('uploadStatus'); // Reusing uploadStatus for download feedback
+        status.innerText = "Fetching file metadata...";
 
-        // 2. Decrypt Chunks
-        let decryptedChunks = [];
-        for (let c of data.chunks) {
-            const dec = await ZKAuth.decryptChunk(c.data, c.chunk_iv, encryptionKey);
-            decryptedChunks.push(dec);
+        try {
+            const res = await fetch(`download.php?file_id_public=${publicId}`);
+            if (!res.ok) throw new Error("Failed to fetch file info");
+            const data = await res.json();
+            
+            // 1. Decrypt Metadata
+            const encMeta = JSON.parse(data.metadata);
+            const meta = await ZKAuth.decryptMetadata(encMeta.blob, encMeta.iv, encryptionKey);
+            
+            console.log("Downloading:", meta.name);
+            status.innerText = `Downloading ${meta.name} (0/${data.chunks.length} chunks)...`;
+
+            // 2. Decrypt Chunks one by one
+            let decryptedChunks = [];
+            for (let i = 0; i < data.chunks.length; i++) {
+                const cInfo = data.chunks[i];
+                status.innerText = `Downloading and decrypting chunk ${i + 1}/${data.chunks.length}...`;
+                
+                const cRes = await fetch(`download.php?action=get_chunk&file_id_public=${publicId}&chunk_index=${cInfo.chunk_index}`);
+                if (!cRes.ok) throw new Error(`Failed to fetch chunk ${i}`);
+                const chunkHex = await cRes.text();
+
+                const dec = await ZKAuth.decryptChunk(chunkHex, cInfo.chunk_iv, encryptionKey);
+                decryptedChunks.push(dec);
+            }
+
+            // 3. Reassemble and Download
+            status.innerText = "Reassembling file...";
+            const finalBlob = new Blob(decryptedChunks, { type: meta.type });
+            const url = URL.createObjectURL(finalBlob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = meta.name;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            status.innerText = "Download complete!";
+        } catch (e) {
+            console.error(e);
+            status.innerText = "Download failed: " + e.message;
         }
-
-        // 3. Reassemble and Download
-        const finalBlob = new Blob(decryptedChunks, { type: meta.type });
-        const url = URL.createObjectURL(finalBlob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = meta.name;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
     }
 
     loadFiles();
