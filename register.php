@@ -1,220 +1,144 @@
 <?php
-// Shared config
-require 'config.php';
+require_once 'config.php';
+require_once 'utils/security.php';
+require_once 'utils.php';
 
-// Set secure session parameters
-$secure = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on';
-session_set_cookie_params([
-    'lifetime' => $session_cookie_lifetime * 3600,
-    'path' => '/',
-    'domain' => '',
-    'secure' => $secure,
-    'httponly' => true,
-    'samesite' => 'Lax'
-]);
-ini_set('session.gc_maxlifetime', $session_max_lifetime * 3600);
+start_secure_session();
 
-session_start();
-
-// Generate CSRF token
-if (!isset($_SESSION['csrf_token'])) {
+// CSRF Protection
+if (empty($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
 
-require 'utils.php';
+$conn = get_db_connection();
+$security = new Security($conn);
 
-// Database connection
-$mysqli = new mysqli($mysql_host, $mysql_user, $mysql_password, $mysql_database);
-if ($mysqli->connect_error) {
-    error_log("MySQL connection failed: " . $mysqli->connect_error);
-    header("HTTP/1.1 500 Internal Server Error");
-    exit();
-}
-
-// Password strength helper
-function isPasswordStrongEnough($password) {
-    global $password_strength, $password_custom_length;
-    switch ($password_strength) {
-        case 'weak':
-            return strlen($password) >= 6;
-        case 'medium':
-            return strlen($password) >= 8;
-        case 'strong':
-            return strlen($password) >= 12 &&
-                   preg_match('/[A-Z]/', $password) &&
-                   preg_match('/[a-z]/', $password) &&
-                   preg_match('/\d/', $password) &&
-                   preg_match('/[^A-Za-z0-9]/', $password);
-        case 'custom':
-            return strlen($password) >= $password_custom_length;
-        default:
-            return strlen($password) >= 6;
-    }
-}
-
-// Handle only register request
+// Handle Registration
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'register') {
-    // Validate CSRF token
-    $csrf_token = filter_input(INPUT_POST, 'csrf_token', FILTER_SANITIZE_SPECIAL_CHARS);
+    $csrf_token = $_POST['csrf_token'] ?? '';
     if (!hash_equals($_SESSION['csrf_token'], $csrf_token)) {
-        exit("Invalid CSRF token.");
+        die("Invalid CSRF token");
     }
 
-    $username = filter_input(INPUT_POST, 'username', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
-    $password = $_POST['password'] ?? '';
-    $email    = filter_input(INPUT_POST, 'email', FILTER_SANITIZE_EMAIL);
+    $username = trim($_POST['username'] ?? '');
+    $email = trim($_POST['email'] ?? '');
+    $salt = $_POST['salt'] ?? '';
+    $auth_key = $_POST['auth_key'] ?? ''; // This is the Hashed Auth Key from client
 
-    // Check email format
+    if (empty($username) || empty($email) || empty($salt) || empty($auth_key)) {
+        die("Missing required fields");
+    }
+
+    // Validate email
     if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        exit("Invalid email format.");
-    }
-    // Check password strength
-    if (!isPasswordStrongEnough($password)) {
-        exit("Password does not meet strength requirements.");
-    }
-
-    // Handle verification
-    $verification_passed = true;
-    $verification_token  = '';
-    if ($verification_method !== 'none') {
-        switch ($verification_method) {
-            case 'email':
-                $verification_token = generate_otp();
-                if (!send_verification_email($email, $verification_token)) {
-                    error_log("Failed to send verification email to: " . $email);
-                    exit("Failed to send verification email.");
-                }
-                break;
-                
-            case 'recaptcha_v2':
-                $captcha_response = $_POST['g-recaptcha-response'] ?? '';
-                $verification_passed = verify_recaptcha_v2($captcha_response, $recaptcha_v2_secret_key);
-                break;
-                
-            case 'recaptcha_v3':
-                $captcha_response = $_POST['g-recaptcha-response'] ?? '';
-                $verification_passed = verify_recaptcha_v3($captcha_response, $recaptcha_v3_secret_key);
-                break;
-                
-            case 'hcaptcha':
-                $captcha_response = $_POST['h-captcha-response'] ?? '';
-                $verification_passed = verify_hcaptcha($captcha_response, $hcaptcha_secret_key);
-                break;
-        }
-        
-        if (!$verification_passed) {
-            exit("Verification failed. Please try again.");
-        }
+        die("Invalid email format");
     }
 
     // Check if user exists
-    $stmt = $mysqli->prepare("SELECT id FROM users WHERE username = ? OR email = ?");
-    $stmt->bind_param("ss", $username, $email);
-    $stmt->execute();
-    $res = $stmt->get_result();
-    if ($res->num_rows > 0) {
-        exit("Username or email already exists.");
+    $stmt = $conn->prepare("SELECT id FROM users WHERE username = ? OR email = ?");
+    $stmt->execute([$username, $email]);
+    if ($stmt->fetch()) {
+        die("Username or Email already taken");
     }
 
-    // Insert new user
-    $hashed_password = password_hash($password, PASSWORD_BCRYPT);
-    $otp_expiry      = time() + ($otp_expiry_minutes * 60);
-    $is_verified     = ($verification_method === 'email') ? 0 : 1;
+    // Server-Side Hashing (bcrypt/argon2) of the Client's Auth Key
+    // The server treats the Auth Key as the "password"
+    $server_hash = password_hash($auth_key, PASSWORD_DEFAULT);
+    
+    // Verification Token
+    $verification_token = bin2hex(random_bytes(16));
+    $otp_expiry = time() + 600; // 10 minutes
 
-    $stmt = $mysqli->prepare("
-        INSERT INTO users (
-            username,
-            email,
-            password,
-            verification_token,
-            is_verified,
-            otp_expiry
-        ) VALUES (?, ?, ?, ?, ?, ?)
-    ");
-    $stmt->bind_param("ssssii", $username, $email, $hashed_password, $verification_token, $is_verified, $otp_expiry);
-    if ($stmt->execute()) {
-        if ($verification_method === 'email') {
+    try {
+        $stmt = $conn->prepare("INSERT INTO users (username, email, auth_verifier, salt, verification_token, otp_expiry, is_verified) VALUES (?, ?, ?, ?, ?, ?, 0)");
+        $stmt->execute([$username, $email, $server_hash, $salt, $verification_token, $otp_expiry]);
+        
+        // Send Email
+        if (send_verification_email($email, $verification_token)) {
             $_SESSION['pending_verification'] = true;
             $_SESSION['pending_email'] = $email;
             header("Location: verify.php");
-            exit();
+            exit;
         } else {
-            $_SESSION['user_id']  = $mysqli->insert_id;
-            $_SESSION['username'] = $username;
-            echo "Registration successful.";
+            die("Failed to send verification email");
         }
-    } else {
-        error_log("Registration failed: " . $mysqli->error);
-        header("HTTP/1.1 500 Internal Server Error");
-        exit("Registration failed");
+    } catch (PDOException $e) {
+        error_log($e->getMessage());
+        die("Registration failed");
     }
 }
-
-// Security headers
-header("Content-Security-Policy: default-src 'self'");
-header("X-Content-Type-Options: nosniff");
-header("X-Frame-Options: DENY");
-header("X-XSS-Protection: 1; mode=block");
-
-$mysqli->close();
 ?>
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Register</title>
-  <link rel="stylesheet" href="css/style.css" />
+    <meta charset="UTF-8">
+    <title>Secure Registration - Zero Knowledge</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="js/zk-auth.js"></script>
 </head>
 <body>
-  <div class="container">
-    <h1>Register</h1>
+<div class="container">
+    <h1>Register (Zero-Knowledge)</h1>
+    <form id="regForm" method="POST">
+        <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
+        <input type="hidden" name="action" value="register">
+        
+        <!-- Hidden fields for ZK Auth -->
+        <input type="hidden" name="salt" id="salt">
+        <input type="hidden" name="auth_key" id="auth_key">
 
-    <form action="" method="POST">
-      <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token']); ?>" />
-      <input type="hidden" name="action" value="register" />
+        <div class="form-field">
+            <label>Username</label>
+            <input type="text" name="username" id="username" required>
+        </div>
+        
+        <div class="form-field">
+            <label>Email</label>
+            <input type="email" name="email" required>
+        </div>
 
-      <div class="form-field">
-        <label for="reg-user">Username</label>
-        <input type="text" id="reg-user" name="username" required />
-      </div>
+        <div class="form-field">
+            <label>Password</label>
+            <!-- Password is NEVER sent to server -->
+            <input type="password" id="password" required>
+        </div>
 
-      <div class="form-field">
-        <label for="reg-email">Email</label>
-        <input type="email" id="reg-email" name="email" required />
-      </div>
-
-      <div class="form-field">
-        <label for="reg-pass">Password</label>
-        <input type="password" id="reg-pass" name="password" required />
-      </div>
-
-      <?php if ($verification_method === 'recaptcha_v2'): ?>
-        <div class="g-recaptcha" data-sitekey="<?php echo htmlspecialchars($recaptcha_v2_site_key); ?>"></div>
-        <script src="https://www.google.com/recaptcha/api.js"></script>
-      <?php elseif ($verification_method === 'recaptcha_v3'): ?>
-        <input type="hidden" name="g-recaptcha-response" id="g-recaptcha-response">
-        <script src="https://www.google.com/recaptcha/api.js?render=<?php echo htmlspecialchars($recaptcha_v3_site_key); ?>"></script>
-        <script>
-          grecaptcha.ready(function() {
-            grecaptcha.execute('<?php echo htmlspecialchars($recaptcha_v3_site_key); ?>', {action: 'register'}).then(function(token) {
-              document.getElementById('g-recaptcha-response').value = token;
-            });
-          });
-        </script>
-      <?php elseif ($verification_method === 'hcaptcha'): ?>
-        <div class="h-captcha" data-sitekey="<?php echo htmlspecialchars($hcaptcha_site_key); ?>"></div>
-        <script src="https://js.hcaptcha.com/1/api.js" async defer></script>
-      <?php endif; ?>
-
-      <input type="submit" value="Register" />
+        <button type="submit">Register Securely</button>
     </form>
+    <p>Already have an account? <a href="login.php">Login</a></p>
+</div>
 
-    <div class="switch-link">
-      <p>Already have an account? <a href="login.php">Login</a></p>
-    </div>
-  </div>
+<script>
+document.getElementById('regForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const pass = document.getElementById('password').value;
+    const user = document.getElementById('username').value;
+    
+    if (pass.length < 12) {
+        alert("Password must be at least 12 characters");
+        return;
+    }
 
-  <script src="js/animation.js"></script>
+    // 1. Generate Salt
+    const saltHex = ZKAuth.generateSalt();
+    document.getElementById('salt').value = saltHex;
+
+    // 2. Derive Key
+    const keyMaterial = await ZKAuth.deriveKey(pass, saltHex);
+    
+    // 3. Split Key
+    const keys = await ZKAuth.splitKey(keyMaterial);
+    
+    // 4. Set Auth Key for Server
+    document.getElementById('auth_key').value = keys.authKeyHex; // This is the hashed auth key
+
+    // 5. Store Encryption Key (Local Storage / Session Storage for now)
+    // In a real app, this would be used to decrypt the user's file vault
+    sessionStorage.setItem('enc_key_' + user, keys.encryptionKeyHex);
+
+    // 6. Submit
+    this.submit();
+});
+</script>
 </body>
 </html>

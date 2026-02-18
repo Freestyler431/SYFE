@@ -1,105 +1,43 @@
 <?php
-// OTP generation function
+// Legacy utils wrapper for backward compatibility
+require_once 'utils/security.php';
+
+// OTP Generation
 function generate_otp() {
-    global $otp_length, $otp_type, $otp_case_sensitive;
-    $characters = match ($otp_type) {
-        'alpha'        => 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ',
-        'alphanumeric' => '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ',
-        default        => '0123456789',
-    };
-    $otp = '';
-    for ($i = 0; $i < $otp_length; $i++) {
-        $otp .= $characters[random_int(0, strlen($characters) - 1)];
-    }
-    return $otp_case_sensitive ? $otp : strtolower($otp);
+    return bin2hex(random_bytes(3)); // 6 hex chars
 }
 
-// CAPTCHA verification functions
-function verify_captcha($url, $data) {
-    $ch = curl_init($url);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_POST, true);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($data));
-    $response = curl_exec($ch);
-    if (curl_errno($ch)) {
-        error_log('cURL error: ' . curl_error($ch));
-        curl_close($ch);
-        return null;
-    }
-    curl_close($ch);
-    return json_decode($response);
-}
-
-function verify_recaptcha_v2($response, $secret_key) {
-    $url = 'https://www.google.com/recaptcha/api/siteverify';
-    $data = [
-        'secret' => $secret_key,
-        'response' => $response,
-        'remoteip' => $_SERVER['REMOTE_ADDR']
-    ];
-    $decoded_response = verify_captcha($url, $data);
-    return $decoded_response->success ?? false;
-}
-
-function verify_recaptcha_v3($response, $secret_key) {
-    $url = 'https://www.google.com/recaptcha/api/siteverify';
-    $data = [
-        'secret' => $secret_key,
-        'response' => $response,
-        'remoteip' => $_SERVER['REMOTE_ADDR']
-    ];
-    $decoded_response = verify_captcha($url, $data);
-    return ($decoded_response->success ?? false) && ($decoded_response->score >= 0.5);
-}
-
-function verify_hcaptcha($response, $secret_key) {
-    $url = 'https://hcaptcha.com/siteverify';
-    $data = [
-        'secret' => $secret_key,
-        'response' => $response,
-        'remoteip' => $_SERVER['REMOTE_ADDR']
-    ];
-    $decoded_response = verify_captcha($url, $data);
-    return $decoded_response->success ?? false;
-}
-
-// Send verification email
+// Email function using PHPMailer
 function send_verification_email($email, $otp) {
-    global $verification_email_subject, $verification_email_message, $email_verification_type,
-           $smtp_host, $smtp_port, $smtp_username, $smtp_password, $smtp_from,
-           $sendmail_path;
-
-    require_once 'PHPMailer/PHPMailer.php';
-    require_once 'PHPMailer/SMTP.php';
-    require_once 'PHPMailer/Exception.php';
+    global $smtp_host, $smtp_port, $smtp_username, $smtp_password, $smtp_from;
+    
+    require_once __DIR__ . '/vendor/PHPMailer/src/Exception.php';
+    require_once __DIR__ . '/vendor/PHPMailer/src/PHPMailer.php';
+    require_once __DIR__ . '/vendor/PHPMailer/src/SMTP.php';
 
     $mail = new PHPMailer\PHPMailer\PHPMailer(true);
+
     try {
-        switch ($email_verification_type) {
-            case 'smtp':
-                $mail->isSMTP();
-                $mail->Host       = $smtp_host;
-                $mail->Port       = $smtp_port;
-                $mail->SMTPAuth   = true;
-                $mail->Username   = $smtp_username;
-                $mail->Password   = $smtp_password;
-                $mail->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
-                break;
-            case 'sendmail':
-                $mail->isSendmail();
-                $mail->Sendmail = $sendmail_path;
-                break;
-            default:
-                return false;
-        }
-        $mail->setFrom($smtp_from);
+        $mail->isSMTP();
+        $mail->Host       = $smtp_host;
+        $mail->SMTPAuth   = true;
+        $mail->Username   = $smtp_username;
+        $mail->Password   = $smtp_password;
+        $mail->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
+        $mail->Port       = $smtp_port;
+
+        $mail->setFrom($smtp_from, 'SYFE Secure');
         $mail->addAddress($email);
-        $mail->Subject = $verification_email_subject;
-        $mail->Body    = $verification_email_message . $otp;
+
+        $mail->isHTML(true);
+        $mail->Subject = 'Verify your Secure Account';
+        $mail->Body    = "Your verification code is: <b>$otp</b><br>This code expires in 10 minutes.";
+        $mail->AltBody = "Your verification code is: $otp";
+
         $mail->send();
         return true;
     } catch (Exception $e) {
-        error_log("Email sending failed: " . $mail->ErrorInfo);
+        error_log("Message could not be sent. Mailer Error: {$mail->ErrorInfo}");
         return false;
     }
 }
