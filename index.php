@@ -33,30 +33,42 @@ if ($require_login === true) {
 </head>
 <body>
   <div class="container">
-    <h1>Welcome, <?= htmlspecialchars($_SESSION['username']); ?></h1>
-    <a href="logout.php">Logout</a>
+    <div class="nav-actions">
+      <h1>Secure Storage</h1>
+      <a href="logout.php" class="logout-link">Logout (<?= htmlspecialchars($_SESSION['username']); ?>)</a>
+    </div>
 
     <div class="upload-section">
-      <h3>Upload File (Zero-Knowledge)</h3>
-      <input type="file" id="fileInput" />
-      <label><input type="checkbox" id="isPublic" /> Shareable?</label>
-      <button onclick="handleUpload()">Securely Upload</button>
+      <h3>Upload File</h3>
+      <div class="file-input-wrapper">
+        <label for="fileInput" class="custom-file-upload">
+          <span>Choose File</span>
+        </label>
+        <input type="file" id="fileInput" onchange="updateFileName()" />
+        <span id="fileNameDisplay" class="file-name-display">No file chosen</span>
+      </div>
+      <label class="checkbox-label">
+        <input type="checkbox" id="isPublic" /> Make this file shareable via link
+      </label>
+      <button onclick="handleUpload()" class="btn-primary">Securely Encrypt & Upload</button>
       <div id="uploadStatus"></div>
     </div>
 
     <div class="files-section">
       <h3>My Encrypted Files</h3>
-      <table id="fileTable">
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Size</th>
-            <th>Uploaded At</th>
-            <th>Action</th>
-          </tr>
-        </thead>
-        <tbody id="fileList"></tbody>
-      </table>
+      <div style="overflow-x: auto;">
+        <table id="fileTable">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Size</th>
+              <th>Uploaded At</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="fileList"></tbody>
+        </table>
+      </div>
     </div>
   </div>
 
@@ -68,6 +80,18 @@ if ($require_login === true) {
     if (!encryptionKey) {
         alert("Session encryption key missing. Please log in again.");
         window.location.href = 'logout.php';
+    }
+
+    function updateFileName() {
+        const input = document.getElementById('fileInput');
+        const display = document.getElementById('fileNameDisplay');
+        if (input.files && input.files[0]) {
+            display.innerText = input.files[0].name;
+            display.classList.add('active');
+        } else {
+            display.innerText = "No file chosen";
+            display.classList.remove('active');
+        }
     }
 
     async function handleUpload() {
@@ -174,13 +198,15 @@ if ($require_login === true) {
             const shareLink = f.is_public == 1 ? `<button onclick="copyShareLink('${f.file_id_public}')">Copy Link</button>` : '';
 
             const row = `<tr>
-                <td>${meta.name}</td>
-                <td>${(meta.size / 1024 / 1024).toFixed(2)} MB</td>
-                <td>${f.created_at}</td>
+                <td style="font-weight: 500;">${meta.name}</td>
+                <td style="color: var(--text-secondary);">${(meta.size / 1024 / 1024).toFixed(2)} MB</td>
+                <td style="color: var(--text-secondary); font-size: 0.85rem;">${f.created_at}</td>
                 <td>
-                    <button onclick="handleDownload('${f.file_id_public}')">Download</button>
-                    ${shareLink}
-                    <button onclick="deleteFile('${f.file_id_public}')" style="background-color: #d9534f; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer;">Delete</button>
+                    <div class="action-buttons">
+                        <button onclick="handleDownload('${f.file_id_public}')" title="Download Decrypted">Download</button>
+                        ${shareLink}
+                        <button onclick="deleteFile('${f.file_id_public}')" title="Delete File Permanently">Delete</button>
+                    </div>
                 </td>
             </tr>`;
             list.innerHTML += row;

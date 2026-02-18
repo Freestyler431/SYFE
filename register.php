@@ -85,8 +85,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'regis
     <script src="js/zk-auth.js"></script>
 </head>
 <body>
-<div class="container">
-    <h1>Register (Zero-Knowledge)</h1>
+<div class="container auth-container">
+    <div class="auth-header">
+        <h1>Create Account</h1>
+        <p style="color: var(--text-secondary);">Start your zero-knowledge storage journey</p>
+    </div>
+
     <form id="regForm" method="POST">
         <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
         <input type="hidden" name="action" value="register">
@@ -96,24 +100,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'regis
         <input type="hidden" name="auth_key" id="auth_key">
 
         <div class="form-field">
-            <label>Username</label>
-            <input type="text" name="username" id="username" required>
+            <label>Choose Username</label>
+            <input type="text" name="username" id="username" placeholder="Unique username" required>
         </div>
         
         <div class="form-field">
-            <label>Email</label>
-            <input type="email" name="email" required>
+            <label>Email Address</label>
+            <input type="email" name="email" placeholder="For account recovery only" required>
         </div>
 
         <div class="form-field">
-            <label>Password</label>
+            <label>Master Password</label>
             <!-- Password is NEVER sent to server -->
-            <input type="password" id="password" required>
+            <input type="password" id="password" placeholder="At least 12 characters" required>
         </div>
 
-        <button type="submit">Register Securely</button>
+        <button type="submit" class="btn-primary">Register Securely</button>
     </form>
-    <p>Already have an account? <a href="login.php">Login</a></p>
+    
+    <div class="switch-link">
+        Already have an account? <a href="login.php">Sign in here</a>
+    </div>
 </div>
 
 <script>

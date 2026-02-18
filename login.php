@@ -100,25 +100,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'login
     <script src="js/zk-auth.js"></script>
 </head>
 <body>
-<div class="container">
-    <h1>Login</h1>
+<div class="container auth-container">
+    <div class="auth-header">
+        <h1>Welcome Back</h1>
+        <p style="color: var(--text-secondary);">Securely access your encrypted vault</p>
+    </div>
+
     <form id="loginForm" method="POST">
         <input type="hidden" name="action" value="login">
         <input type="hidden" name="auth_key" id="auth_key">
 
         <div class="form-field">
             <label>Username</label>
-            <input type="text" name="username" id="username" required>
+            <input type="text" name="username" id="username" placeholder="Enter your username" required>
         </div>
 
         <div class="form-field">
             <label>Password</label>
-            <input type="password" id="password" required>
+            <input type="password" id="password" placeholder="••••••••••••" required>
         </div>
 
-        <button type="submit">Login</button>
+        <button type="submit" class="btn-primary">Sign In</button>
     </form>
-    <p>Don't have an account? <a href="register.php">Register</a></p>
+    
+    <div class="switch-link">
+        Don't have an account? <a href="register.php">Create one securely</a>
+    </div>
 </div>
 
 <script>
@@ -140,10 +147,14 @@ document.getElementById('loginForm').addEventListener('submit', async function(e
     const derivedBits = await ZKAuth.deriveKey(pass, data.salt);
     const keys = await ZKAuth.splitKey(derivedBits);
 
-    // 3. Set Auth Key
+    // 3. Set Auth Key for Server
     document.getElementById('auth_key').value = keys.authKeyHex;
+    
+    // 4. Store Encryption Key locally for the session
+    // This key is never sent to the server.
+    sessionStorage.setItem('enc_key_' + user, keys.encryptionKeyHex);
 
-    // 4. Submit
+    // 5. Submit
     this.submit();
 });
 </script>

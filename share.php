@@ -17,18 +17,22 @@ header("Strict-Transport-Security: max-age=31536000; includeSubDomains; preload"
     <script src="js/zk-auth.js"></script>
 </head>
 <body>
-    <div class="container">
+    <div class="container share-card">
         <h1>Zero-Knowledge Shared File</h1>
-        <div id="loading" style="display:none;">Fetching encrypted shards...</div>
-        <div id="decrypting" style="display:none;">Decrypting and reassembling...</div>
+        <p>This file is encrypted and can only be decrypted locally by you.</p>
+        
+        <div id="loading" style="display:none;" class="loading">Fetching encrypted shards...</div>
+        <div id="decrypting" style="display:none;" class="loading">Decrypting and reassembling...</div>
         
         <div id="password-form" style="display:none;">
-            <p>This file is encrypted. Enter the password to download:</p>
-            <input type="password" id="share-password" placeholder="Encryption Password">
-            <button onclick="startSharedDownload()">Unlock & Download</button>
+            <p style="font-size: 0.9rem; margin-bottom: 1rem;">Enter the decryption password to unlock:</p>
+            <div class="form-field">
+                <input type="password" id="share-password" placeholder="Encryption Password">
+            </div>
+            <button onclick="startSharedDownload()" class="btn-primary">Unlock & Download</button>
         </div>
 
-        <div id="error" style="color:red;"></div>
+        <div id="error" style="color:var(--danger); margin-top: 1rem; font-size: 0.9rem;"></div>
     </div>
 
     <script>
@@ -79,6 +83,10 @@ header("Strict-Transport-Security: max-age=31536000; includeSubDomains; preload"
                 const encMeta = JSON.parse(data.metadata);
                 const meta = await ZKAuth.decryptMetadata(encMeta.blob, encMeta.iv, keyHex);
                 
+                // Update UI with Filename
+                document.querySelector('h1').innerText = meta.name;
+                document.title = `${meta.name} - Secure Share`;
+
                 document.getElementById('loading').style.display = 'none';
                 document.getElementById('decrypting').style.display = 'block';
                 document.getElementById('decrypting').innerText = `Downloading and decrypting ${meta.name} (0/${data.chunks.length})...`;
