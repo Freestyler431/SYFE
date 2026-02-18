@@ -1,0 +1,12 @@
+.git
+.gitignore
+.env
+.dockerignore
+storage/
+docker-compose.yml
+Dockerfile
+README.md
+database.sql
+vendor/PHPMailer/.git
+vendor/PHPMailer/.github
+vendor/PHPMailer/test

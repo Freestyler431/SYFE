@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  # SYFE Application
+  app:
+    build: .
+    container_name: syfe_app
+    ports:
+      - "8080:80"
+    environment:
+      - DB_HOST=db
+      - DB_NAME=syfe_db
+      - DB_USER=syfe_user
+      - DB_PASS=syfe_secure_pass
+      - SERVER_PEPPER=8f39b6e2c1a4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0
+    depends_on:
+      - db
+    volumes:
+      - .:/var/www/html
+      - storage_data:/var/www/html/storage
+    networks:
+      - syfe_network
+
+  # MySQL Database
+  db:
+    image: mysql:8.0
+    container_name: syfe_db
+    restart: always
+    environment:
+      - MYSQL_DATABASE=syfe_db
+      - MYSQL_USER=syfe_user
+      - MYSQL_PASSWORD=syfe_secure_pass
+      - MYSQL_ROOT_PASSWORD=syfe_root_pass
+    volumes:
+      - db_data:/var/lib/mysql
+      - ./database.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - syfe_network
+
+networks:
+  syfe_network:
+    driver: bridge
+
+volumes:
+  db_data:
+  storage_data:
