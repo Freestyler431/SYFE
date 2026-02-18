@@ -32,7 +32,7 @@ $mysql_database = getenv('DB_NAME') ?: 'syfe_db';
 $session_max_lifetime = getenv('SESSION_LIFETIME') ?: 24;
 $session_cookie_lifetime = getenv('SESSION_LIFETIME') ?: 24;
 $require_login = getenv('REQUIRE_LOGIN') === 'true';
-$test_mode = getenv('TEST_MODE') === 'true' ?: true; // Default to true for your test request
+$test_mode = getenv('TEST_MODE') === 'true'; // Default to false
 $server_pepper = getenv('SERVER_PEPPER') ?: 'fallback-pepper-change-me';
 
 // Secure Session Initialization
