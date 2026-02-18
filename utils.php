@@ -9,7 +9,12 @@ function generate_otp() {
 
 // Email function using PHPMailer
 function send_verification_email($email, $otp) {
-    global $smtp_host, $smtp_port, $smtp_username, $smtp_password, $smtp_from;
+    global $smtp_host, $smtp_port, $smtp_username, $smtp_password, $smtp_from, $test_mode;
+    
+    if ($test_mode) {
+        error_log("TEST MODE: Verification code for $email is: $otp");
+        return true;
+    }
     
     require_once __DIR__ . '/vendor/PHPMailer/src/Exception.php';
     require_once __DIR__ . '/vendor/PHPMailer/src/PHPMailer.php';

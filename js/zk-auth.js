@@ -86,9 +86,9 @@ const ZKAuth = {
     },
 
     // 5. Encrypt File Chunks (AES-GCM)
-    // Splits file into 5MB chunks (Standard for ZK)
+    // Splits file into 1MB chunks (ZK-friendly)
     encryptFile: async (file, keyHex) => {
-        const chunkSize = 5 * 1024 * 1024; // 5MB
+        const chunkSize = 1 * 1024 * 1024; // 1MB
         const key = await ZKAuth._importKey(keyHex);
         const chunks = [];
         const totalChunks = Math.ceil(file.size / chunkSize);

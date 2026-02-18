@@ -32,6 +32,7 @@ $mysql_database = getenv('DB_NAME') ?: 'syfe_db';
 $session_max_lifetime = getenv('SESSION_LIFETIME') ?: 24;
 $session_cookie_lifetime = getenv('SESSION_LIFETIME') ?: 24;
 $require_login = getenv('REQUIRE_LOGIN') === 'true';
+$test_mode = getenv('TEST_MODE') === 'true' ?: true; // Default to true for your test request
 $server_pepper = getenv('SERVER_PEPPER') ?: 'fallback-pepper-change-me';
 
 // Secure Session Initialization
@@ -50,6 +51,11 @@ function start_secure_session() {
         ]);
         ini_set('session.gc_maxlifetime', $session_max_lifetime * 3600);
         session_start();
+    }
+    
+    // Ensure CSRF token exists
+    if (empty($_SESSION['csrf_token'])) {
+        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
     }
 }
 

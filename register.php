@@ -50,9 +50,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'regis
     $otp_expiry = time() + 600; // 10 minutes
 
     try {
-        $stmt = $conn->prepare("INSERT INTO users (username, email, auth_verifier, salt, verification_token, otp_expiry, is_verified) VALUES (?, ?, ?, ?, ?, ?, 0)");
-        $stmt->execute([$username, $email, $server_hash, $salt, $verification_token, $otp_expiry]);
+        $is_verified = $test_mode ? 1 : 0;
+        $stmt = $conn->prepare("INSERT INTO users (username, email, auth_verifier, salt, verification_token, otp_expiry, is_verified) VALUES (?, ?, ?, ?, ?, ?, ?)");
+        $stmt->execute([$username, $email, $server_hash, $salt, $verification_token, $otp_expiry, $is_verified]);
         
+        if ($test_mode) {
+            $_SESSION['user_id'] = $conn->lastInsertId();
+            $_SESSION['username'] = $username;
+            header("Location: index.php");
+            exit;
+        }
+
         // Send Email
         if (send_verification_email($email, $verification_token)) {
             $_SESSION['pending_verification'] = true;

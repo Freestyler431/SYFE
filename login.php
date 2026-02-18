@@ -60,11 +60,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'login
             
             $security->logAttempt($ip, $username, true);
             
-            if (!$user['is_verified']) {
+            if (!$user['is_verified'] && !$test_mode) {
                 $_SESSION['pending_verification'] = true;
                 $_SESSION['pending_email'] = $username; // Email not fetched here, but verify logic handles it
                 header("Location: verify.php");
                 exit;
+            }
+
+            if ($test_mode && !$user['is_verified']) {
+                $conn->prepare("UPDATE users SET is_verified = 1 WHERE id = ?")->execute([$user['id']]);
             }
 
             header("Location: index.php");

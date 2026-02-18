@@ -71,49 +71,87 @@ if ($require_login === true) {
     }
 
     async function handleUpload() {
-        const file = document.getElementById('fileInput').files[0];
-        if (!file) return;
+        const fileInput = document.getElementById('fileInput');
+        const file = fileInput.files[0];
+        if (!file) {
+            console.warn("No file selected");
+            return;
+        }
 
         const status = document.getElementById('uploadStatus');
-        status.innerText = "Encrypting and splitting...";
+        status.innerText = "Initializing upload...";
+        console.log("Starting upload for:", file.name);
 
-        // 1. Encrypt Metadata
-        const metadata = { name: file.name, size: file.size, type: file.type };
-        const encMetadata = await ZKAuth.encryptMetadata(metadata, encryptionKey);
-        
-        // 2. Encrypt & Split File
-        const chunks = await ZKAuth.encryptFile(file, encryptionKey);
+        try {
+            const csrfToken = "<?= $_SESSION['csrf_token'] ?>";
+            
+            // 1. Encrypt Metadata
+            const metadata = { name: file.name, size: file.size, type: file.type };
+            const encMetadata = await ZKAuth.encryptMetadata(metadata, encryptionKey);
+            
+            const chunkSize = 1 * 1024 * 1024; // 1MB
+            const totalChunks = Math.ceil(file.size / chunkSize);
 
-        // 3. Register File with Server
-        const fd = new FormData();
-        fd.append('action', 'create_file');
-        fd.append('csrf_token', "<?= $_SESSION['csrf_token'] ?>");
-        fd.append('metadata', JSON.stringify(encMetadata)); // Store as {blob: hex, iv: hex}
-        fd.append('total_chunks', chunks.length);
-        fd.append('is_public', document.getElementById('isPublic').checked ? 1 : 0);
+            // 2. Register File with Server
+            const fd = new FormData();
+            fd.append('action', 'create_file');
+            fd.append('csrf_token', csrfToken);
+            fd.append('metadata', JSON.stringify(encMetadata));
+            fd.append('total_chunks', totalChunks);
+            fd.append('is_public', document.getElementById('isPublic').checked ? 1 : 0);
 
-        const res = await fetch('upload.php', { method: 'POST', body: fd });
-        const data = await res.json();
+            console.log("Registering file...");
+            const res = await fetch('upload.php', { method: 'POST', body: fd });
+            const data = await res.json();
+            console.log("Registration response:", data);
 
-        if (data.file_id) {
-            // 4. Upload Chunks
-            for (let chunk of chunks) {
-                status.innerText = `Uploading chunk ${chunk.index + 1}/${chunks.length}...`;
+            if (!data.file_id) throw new Error(data.error || "Failed to initialize upload");
+
+            // 3. Encrypt & Upload Chunks one-by-one
+            const key = await ZKAuth._importKey(encryptionKey);
+            
+            for (let i = 0; i < totalChunks; i++) {
+                status.innerText = `Processing and uploading chunk ${i + 1}/${totalChunks}...`;
+                
+                const start = i * chunkSize;
+                const end = Math.min(start + chunkSize, file.size);
+                const chunkData = await file.slice(start, end).arrayBuffer();
+                
+                // Encrypt chunk
+                const iv = window.crypto.getRandomValues(new Uint8Array(12));
+                const encrypted = await window.crypto.subtle.encrypt(
+                    { name: "AES-GCM", iv: iv },
+                    key,
+                    chunkData
+                );
+                
+                const encryptedUint8 = new Uint8Array(encrypted);
+                const chunkHex = ZKAuth._toHex(encryptedUint8);
+                const chunkHash = await ZKAuth._hash(encryptedUint8);
+
+                // Upload chunk
                 const cfd = new FormData();
                 cfd.append('action', 'upload_chunk');
-                cfd.append('csrf_token', "<?= $_SESSION['csrf_token'] ?>");
+                cfd.append('csrf_token', csrfToken);
                 cfd.append('file_id', data.file_id);
-                cfd.append('chunk_index', chunk.index);
-                cfd.append('chunk_hash', chunk.hash);
-                cfd.append('chunk_data', chunk.data);
-                cfd.append('chunk_iv', chunk.iv); // Store IV for decryption
+                cfd.append('chunk_index', i);
+                cfd.append('chunk_hash', chunkHash);
+                cfd.append('chunk_data', chunkHex);
+                cfd.append('chunk_iv', ZKAuth._toHex(iv));
                 
-                // Store IV in metadata if not already there, but standard AES-GCM needs it per chunk
-                // We'll update the metadata with all chunk IVs or store them per chunk in DB
-                await fetch('upload.php', { method: 'POST', body: cfd });
+                const cRes = await fetch('upload.php', { method: 'POST', body: cfd });
+                const cData = await cRes.json();
+                if (cData.error) throw new Error(cData.error);
+                
+                console.log(`Chunk ${i+1}/${totalChunks} uploaded successfully`);
             }
+
             status.innerText = "Upload complete!";
+            fileInput.value = ""; // Clear input
             loadFiles();
+        } catch (e) {
+            console.error("Upload error:", e);
+            status.innerText = "Upload failed: " + (e.message || "Unknown error");
         }
     }
 
@@ -142,9 +180,38 @@ if ($require_login === true) {
                 <td>
                     <button onclick="handleDownload('${f.file_id_public}')">Download</button>
                     ${shareLink}
+                    <button onclick="deleteFile('${f.file_id_public}')" style="background-color: #d9534f; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer;">Delete</button>
                 </td>
             </tr>`;
             list.innerHTML += row;
+        }
+    }
+
+    async function deleteFile(publicId) {
+        if (!confirm("Are you sure you want to delete this file forever?")) return;
+
+        const status = document.getElementById('uploadStatus');
+        status.innerText = "Deleting file...";
+
+        try {
+            const csrfToken = "<?= $_SESSION['csrf_token'] ?>";
+            const fd = new FormData();
+            fd.append('action', 'delete_file');
+            fd.append('csrf_token', csrfToken);
+            fd.append('file_id_public', publicId);
+
+            const res = await fetch('upload.php', { method: 'POST', body: fd });
+            const data = await res.json();
+
+            if (data.status === 'success') {
+                status.innerText = "File deleted successfully!";
+                loadFiles(); // Refresh list
+            } else {
+                throw new Error(data.error || "Failed to delete file");
+            }
+        } catch (e) {
+            console.error("Delete error:", e);
+            status.innerText = "Delete failed: " + (e.message || "Unknown error");
         }
     }
 
