@@ -6,8 +6,8 @@ RUN apt-get update && apt-get install -y \
     && docker-php-ext-install pdo_mysql \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Enable Apache mod_rewrite
-RUN a2enmod rewrite
+# Enable Apache mod_rewrite and headers
+RUN a2enmod rewrite headers
 
 # Increase PHP limits for large chunks
 RUN echo "post_max_size = 64M" > /usr/local/etc/php/conf.d/uploads.ini && \

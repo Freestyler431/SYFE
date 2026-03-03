@@ -1,0 +1,12 @@
+# Prevent access to dotfiles like .env, .git
+<FilesMatch "^\.">
+    Require all denied
+</FilesMatch>
+
+# Prevent access to specific sensitive files
+<FilesMatch "^(config\.php|database\.sql|docker-compose\.yml|Dockerfile|README\.md|LICENSE)$">
+    Require all denied
+</FilesMatch>
+
+# Prevent directory listing
+Options -Indexes

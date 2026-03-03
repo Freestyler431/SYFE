@@ -34,20 +34,27 @@ $session_cookie_lifetime = getenv('SESSION_LIFETIME') ?: 24;
 $require_login = getenv('REQUIRE_LOGIN') === 'true';
 $test_mode = getenv('TEST_MODE') === 'true'; // Default to false
 $server_pepper = getenv('SERVER_PEPPER') ?: 'fallback-pepper-change-me';
+$reverse_proxy = getenv('REVERSE_PROXY') === 'true';
 
 // Secure Session Initialization
 function start_secure_session() {
-    global $session_cookie_lifetime, $session_max_lifetime;
+    global $session_cookie_lifetime, $session_max_lifetime, $reverse_proxy;
     
     if (session_status() === PHP_SESSION_NONE) {
         $secure = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on';
+
+        // Handle Reverse Proxy HTTPS termination
+        if ($reverse_proxy && isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') {
+            $secure = true;
+        }
+
         session_set_cookie_params([
             'lifetime' => $session_cookie_lifetime * 3600,
             'path' => '/',
             'domain' => '',
             'secure' => $secure,
             'httponly' => true,
-            'samesite' => 'Strict' // Maximum CSRF Protection
+            'samesite' => $reverse_proxy ? 'Lax' : 'Strict' // Use Lax for reverse proxies
         ]);
         ini_set('session.gc_maxlifetime', $session_max_lifetime * 3600);
         session_start();
