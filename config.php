@@ -76,14 +76,26 @@ $smtp_from = getenv('SMTP_FROM');
 // Application Constants
 $password_strength = getenv('PASSWORD_STRENGTH') ?: 'strong';
 $verification_method = 'email'; // Enforced for security
+$captcha_required = getenv('CAPTCHA_REQUIRED') === 'true';
 
-// CAPTCHA Keys (Keep as placeholders/test keys per request instructions)
-$recaptcha_v2_site_key = '6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI';
-$recaptcha_v2_secret_key = '6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe';
-$recaptcha_v3_site_key = '6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI'; 
-$recaptcha_v3_secret_key = '6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe';
-$hcaptcha_site_key = '10000000-ffff-ffff-ffff-000000000001';
-$hcaptcha_secret_key = '0x0000000000000000000000000000000000000000';
+// CAPTCHA Keys
+$recaptcha_v2_site_key = getenv('RECAPTCHA_V2_SITE_KEY');
+$recaptcha_v2_secret_key = getenv('RECAPTCHA_V2_SECRET_KEY');
+$recaptcha_v3_site_key = getenv('RECAPTCHA_V3_SITE_KEY');
+$recaptcha_v3_secret_key = getenv('RECAPTCHA_V3_SECRET_KEY');
+$hcaptcha_site_key = getenv('HCAPTCHA_SITE_KEY');
+$hcaptcha_secret_key = getenv('HCAPTCHA_SECRET_KEY');
+
+// Verify CAPTCHA configuration if required
+if ($captcha_required) {
+    $has_recaptcha_v2 = !empty($recaptcha_v2_site_key) && !empty($recaptcha_v2_secret_key);
+    $has_recaptcha_v3 = !empty($recaptcha_v3_site_key) && !empty($recaptcha_v3_secret_key);
+    $has_hcaptcha = !empty($hcaptcha_site_key) && !empty($hcaptcha_secret_key);
+
+    if (!$has_recaptcha_v2 && !$has_recaptcha_v3 && !$has_hcaptcha) {
+        die("CAPTCHA configuration error: CAPTCHA is required but no valid keys were provided in the environment.");
+    }
+}
 
 // Mailer Setup Check
 if (!file_exists(__DIR__ . '/vendor/PHPMailer/src/PHPMailer.php')) {
