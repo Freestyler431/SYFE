@@ -33,7 +33,29 @@ $session_max_lifetime = getenv('SESSION_LIFETIME') ?: 24;
 $session_cookie_lifetime = getenv('SESSION_LIFETIME') ?: 24;
 $require_login = getenv('REQUIRE_LOGIN') === 'true';
 $test_mode = getenv('TEST_MODE') === 'true'; // Default to false
-$server_pepper = getenv('SERVER_PEPPER') ?: 'fallback-pepper-change-me';
+
+// Ensure SERVER_PEPPER is set, generate and save it if missing
+$server_pepper = getenv('SERVER_PEPPER');
+if (empty($server_pepper)) {
+    $env_path = __DIR__ . '/.env';
+    if (!file_exists($env_path)) {
+        die("Installation Error: .env file is missing. Please create a .env file so the application can generate and store the SERVER_PEPPER securely.\n");
+    }
+
+    // Generate a secure random pepper
+    $server_pepper = bin2hex(random_bytes(32));
+
+    // Append it to the .env file
+    if (file_put_contents($env_path, "\n# Auto-generated Server Pepper\nSERVER_PEPPER=" . $server_pepper . "\n", FILE_APPEND) === false) {
+        die("Installation Error: Failed to write to .env file. Please check file permissions.\n");
+    }
+
+    // Set it in current environment so this request can proceed
+    putenv(sprintf('SERVER_PEPPER=%s', $server_pepper));
+    $_ENV['SERVER_PEPPER'] = $server_pepper;
+    $_SERVER['SERVER_PEPPER'] = $server_pepper;
+}
+
 $reverse_proxy = getenv('REVERSE_PROXY') === 'true';
 
 // Secure Session Initialization
