@@ -163,3 +163,8 @@ const ZKAuth = {
         return ZKAuth._toHex(new Uint8Array(hash));
     }
 };
+
+// Export for Node.js testing environment
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = ZKAuth;
+}
