@@ -20,6 +20,11 @@ function loadEnv($path) {
     }
 }
 
+// Allow testing loadEnv without triggering global configuration
+if (defined('SYFE_LOAD_ENV_TEST') && SYFE_LOAD_ENV_TEST) {
+    return;
+}
+
 loadEnv(__DIR__ . '/.env');
 
 // Database Configuration
